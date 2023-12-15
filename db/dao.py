@@ -1,8 +1,5 @@
 import functools
-
-from docarray.index import HnswDocumentIndex
     
-    # 日志
 from common.log import get_logger
 logger = get_logger()
 
@@ -10,16 +7,13 @@ from common.conf import get_conf
 conf = get_conf()
 
 from document import ImageFeature
-    
-db_images = HnswDocumentIndex[ImageFeature](
-    work_dir=conf.image_vs
-)
 
 @functools.lru_cache
 def load_db():
     '''
     加载视频 & 图片数据库
     '''
+    from docarray.index import HnswDocumentIndex
     db_images = HnswDocumentIndex[ImageFeature](
         work_dir=conf.image_vs
     )

@@ -7,13 +7,12 @@ import PIL
 from PIL import Image
 import numpy as np
 
-from docarray import BaseDoc, DocList
+from docarray import DocList
 
 import torch
-from torch import Tensor
 
 import cn_clip.clip as clip
-from cn_clip.clip import load_from_name, available_models
+from cn_clip.clip import load_from_name
 
 # 日志
 from common.log import get_logger
@@ -23,8 +22,8 @@ from common.conf import get_conf
 conf = get_conf()
 
 from .text import split_text
-from .image import load_imgs, load_imgs2,load_imgs3
-from .video import extract_video_from_folder, load_video
+from .image import load_imgs3
+from .video import load_video
 
 from db import dao
 from document import ImageFeature
@@ -101,24 +100,6 @@ def get_similarity2(model, imgs_f, texts_f, device='cuda'):
     probs = logits_per_image.softmax(dim=-1).cpu().detach().numpy()
     
     return probs
-    
-
-# 根据秒数还原 例如 10829s 转换为 03:04:05
-def getTime(t: int):
-    m,s = divmod(t, 60)
-    h, m = divmod(m, 60)
-    t_str = "%02d:%02d:%02d" % (h, m, s)
-    return t_str
-    
-# 根据传入的时间戳位置对视频进行截取
-def cutVideo(start_t: str, length: int, input: str, output: str):
-    """
-    start_t: 起始位置
-    length: 持续时长
-    input: 视频输入位置
-    output: 视频输出位置
-    """
-    os.system(f'ffmpeg -ss {start_t} -i {input} -t {length} -c:v copy -c:a copy -y {output}')
 
 def getMultiRange(results: list, threshold = 0.5, dValue=0.1, maxCount: int = 3, length: int = 10):
     '''
@@ -138,7 +119,8 @@ def getMultiRange(results: list, threshold = 0.5, dValue=0.1, maxCount: int = 3,
         index_list.append({
             "leftIndex": leftIndex,
             "rightIndex": rightIndex,
-            "maxImage": maxImage
+            "maxImage": maxImage,
+            "score": maxImage['score']
         })
         # 将已经提取的片段，添加到忽略列表
         if maxImage["uri"] in ignore_range:
@@ -212,7 +194,8 @@ def encode_video(model, preprocess, video_file, frames, device):
             img_feature /= img_feature.norm(dim=-1, keepdim=True) 
             
             #
-            video_f.append(ImageFeature(uid=idx, url=video_file, embedding=torch.squeeze(img_feature)))      # shape [1024]
+            folder = os.path.dirname(video_file)
+            video_f.append(ImageFeature(uid=idx, url=video_file, folder=folder, embedding=torch.squeeze(img_feature)))      # shape [1024]
         
     return video_f
 
@@ -231,26 +214,41 @@ def construct_features(img_fs):
             
     return img_features
 
+def update_image_db(model, preprocess, image_paths, db):
+    for image_path in image_paths:
+        image_path = image_path.replace('\\', '/')          # 转换为同意格式
+        images = load_imgs3(image_path, db)     # 加载数据库中未保存的图片
+        
+        img_fs = DocList[ImageFeature]([])
+        
+        # 将图片进行处理
+        for idx, img in enumerate(images):
+            with torch.no_grad():
+                image_token = preprocess(Image.fromarray(img.tensor)).unsqueeze(0).to(conf.device)
+                img_feature = model.encode_image(image_token)
+                img_feature /= img_feature.norm(dim=-1, keepdim=True) 
+                
+                #
+                url = img.url.replace('\\', '/')
+                folder = os.path.dirname(url)
+                img_fs.append(ImageFeature(uid=idx, url=url, folder=folder, embedding=torch.squeeze(img_feature)))      # shape [1024
+        
+        if len(img_fs):
+            db.index(img_fs)            # 添加新图片至数据库中
     
-def find_image(db, model, preprocess, text, image_path, threshold=0.5, topn=3):
+def find_image(text, image_paths, threshold=0.5, topn=3):
+    '''
+    image_paths : 图片目录列表
+    '''
+    # 加载模型
+    model, preprocess = load_chinese_clip(conf.clip_model_name, conf.download_root)
+    # 读取数据库
+    db, _ = dao.load_db()
+    
     texts = split_text(text, sentence_size=conf['sentence_size'])
     
-    images = load_imgs3(image_path, db)     # 加载数据库中未保存的图片
-    
-    img_fs = DocList[ImageFeature]([])
-    
-    # 将图片进行处理
-    for idx, img in enumerate(images):
-        with torch.no_grad():
-            image_token = preprocess(Image.fromarray(img.tensor)).unsqueeze(0).to(conf.device)
-            img_feature = model.encode_image(image_token)
-            img_feature /= img_feature.norm(dim=-1, keepdim=True) 
-            
-            #
-            img_fs.append(ImageFeature(uid=idx, url=img.url, embedding=torch.squeeze(img_feature)))      # shape [1024
-    
-    if len(img_fs):
-        db.index(img_fs)            # 添加新图片至数据库中
+    # 加载图片至数据库
+    update_image_db(model, preprocess, image_paths, db)
     
     text_features = encode_text(model, texts, device=conf.device)                   # texts : 分割后的文本数组
     # 对特征进行归一化，请使用归一化后的图文特征用于下游任务
@@ -258,7 +256,24 @@ def find_image(db, model, preprocess, text, image_path, threshold=0.5, topn=3):
     
     # # queries  = []
     # matches, scores = db.find_batched(text_features.cpu(), search_field='embedding', limit=10)
-    img_fs = dao.filter_all(db, {'uid':{'$gte':0}})     # 查找所有
+    # queries = {'folder':{'$eq':image_path}}
+    img_fs = []
+    if image_paths:
+        # 目标目录不为空，则搜索指定目录
+        for image_path in image_paths:
+            image_path.replace('\\', '/')
+            queries = {'folder':{'$eq':image_path}}
+            f_docs = dao.filter_all(db, queries)
+            if f_docs:
+                img_fs.extend(f_docs)
+    else:
+        # 目标目录为空，则全部搜索
+        queries = {'url':{'$gte':0}}
+        img_fs = dao.filter_all(db, queries)     # 查找所有
+        
+    if not img_fs:
+        logger.warning(f'in {image_paths} found {texts}, no results\n')
+        return {}               
     
     img_features = construct_features(img_fs)       # 将doclist[ImageFeature] , 变换为tensor([n,1024]);
 
@@ -291,24 +306,49 @@ def get_image_by_probs(probs, texts, img_fs, threshold=0.5, topn=3):
     
     return results
 
-def find_video(db, model, preprocess, text,vedio_path, threshold=0.5, dvalue=0.1, topn=3, length=10):
+def update_video_db(model, preprocess, db, video_paths):
+    for video_path in video_paths:
+        video_path = video_path.replace('\\', '/')
+        # 读取视频文件
+        vf, v_frames = load_video(db, video_path)       # 
+        
+        for idx, f in enumerate(vf):
+            # 
+            video_f = encode_video(model, preprocess, f, v_frames[idx], device=conf.device)    
+            if video_f:
+                db.index(video_f)   
+
+def find_video(text,video_paths, threshold=0.5, dvalue=0.1, topn=3, length=10):
     '''
     '''
+    # 加载模型
+    model, preprocess = load_chinese_clip(conf.clip_model_name, conf.download_root)
+    # 读取数据库
+    _, db = dao.load_db()
+    
     statements = split_text(text, sentence_size=conf['sentence_size'])
     
-    # 读取视频文件
-    vf, v_frames = load_video(db, vedio_path)       # 
-    
-    for idx, f in enumerate(vf):
-        # 
-        video_f = encode_video(model, preprocess, f, v_frames[idx], device=conf.device)    
-        if video_f:
-            db.index(video_f)
+    # 读取并更新视频文件至数据库
+    update_video_db(model, preprocess, db, video_paths)
+       
+    frames_f = [] 
+    if video_paths:
+        for video_path in video_paths:
+            video_path.replace('\\', '/')
+            queries = {'folder':{'$eq':video_path}}         # 注意文件目录windows 与linux的区别
+            v_docs = dao.filter_all(db, queries) 
+            if v_docs:
+                frames_f.extend(v_docs)
+    else:
+        # 给定目录为空，过滤处理全部视频帧
+        # filter all video frame features
+        queries = {'uid':{'$gte':0}}
+        # queries = {'folder':{'$eq':vedio_path}}
+        frames_f = dao.filter_all(db, queries)          # 全部帧
         
-        
-    # filter all video frame features
-    queries = {'uid':{'$gte':0}}
-    frames_f = dao.filter_all(db, queries)          # 全部帧
+    if not frames_f:
+        logger.warning(f'in {video_paths} found {statements}, no results\n')
+        return {}
     
     text_features = encode_text(model, statements, device=conf.device)                   # texts : 分割后的文本数组
     # 对特征进行归一化，请使用归一化后的图文特征用于下游任务
@@ -318,7 +358,7 @@ def find_video(db, model, preprocess, text,vedio_path, threshold=0.5, dvalue=0.1
     
     probs = get_similarity2(model, frames_features, text_features, device=conf.device)
     
-    s_results = []
+    s_results = {}
     for i,kw in enumerate(statements):
         results = []
         if kw==conf.negativate_class:
@@ -335,129 +375,30 @@ def find_video(db, model, preprocess, text,vedio_path, threshold=0.5, dvalue=0.1
             results.append(result)
             
         index_list = getMultiRange(results, threshold=threshold, dValue=dvalue, maxCount=topn, length=length) #
-        s_results.append([kw, index_list])
-    
-    video_r = {}
-    for kw, index_list in s_results:
-        videos = []
-        for idx, item in enumerate(index_list):
-            left, right = index_list[idx]['leftIndex'], index_list[idx]['rightIndex']
-            # duration = right - left 
-            start = getTime(left) # 将其转换为标准时间
-            
-            max_index = item['maxImage']['index']
-            uri = item['maxImage']['uri']
-            score = item['maxImage']['score']
-            
-            output =  "{}/clip_{}_{}.mp4".format(conf.tmp_dir, kw, idx)
-
-            logger.info('cut video:{} from: {} to: {}. maxImage:{}\noutput:{}'.format(uri, left, right, max_index, output))
-            cutVideo(start,right-left, uri, output) # 对视频进行切分
-            
-            videos.append({'uri':output, 'score':score, 'origin_video':uri, 'range':[left, right]})
+        # s_results.append([kw, index_list])
+        s_results[kw] = index_list
         
-        video_r[kw] = videos
-    return video_r
+    logger.info('find video results: {}'.format(s_results))
+    # video_r = {}
+    # for kw, index_list in s_results:
+    #     videos = []
+    #     for idx, item in enumerate(index_list):
+    #         left, right = index_list[idx]['leftIndex'], index_list[idx]['rightIndex']
+    #         # duration = right - left 
+    #         start = getTime(left) # 将其转换为标准时间
+            
+    #         max_index = item['maxImage']['index']
+    #         uri = item['maxImage']['uri']
+    #         score = item['maxImage']['score']
+            
+    #         output =  "{}/clip_{}_{}.mp4".format(conf.tmp_dir, kw, idx)
+
+    #         logger.info('cut video:{} from: {} to: {}. maxImage:{}\noutput:{}'.format(uri, left, right, max_index, output))
+    #         cutVideo(start,right-left, uri, output) # 对视频进行切分
+            
+    #         videos.append({'uri':output, 'score':score, 'origin_video':uri, 'range':[left, right]})
+        
+    #     video_r[kw] = videos
+    return s_results
 
 
-def search_video(model, preprocess, text,vedio_path, threshold=0.5, dvalue=0.1, topn=3, length=10):
-    '''
-    视频目录： 存放用于存储视频文件的目录，视频文件(*.pm4)
-    '''
-    statements = split_text(text, sentence_size=conf['sentence_size'])
-    
-    vf, imgs = extract_video_from_folder(vedio_path, ext='*.mp4')
-    
-    # 将全部视频的关键帧都放到一个array 中处理
-    video_probs = []
-    for idx, f in enumerate(vf):
-        probs = get_similarity(model, preprocess, imgs[idx], statements, device=conf.device)
-        
-        video_probs.append([f, probs])                  # 视频文件f，其关键帧与texts匹配置信度为 probs
-
-    s_results = []
-    for i, kw in enumerate(statements):
-        results = []
-        if kw==conf.negativate_class:
-            continue
-        for f,  probs in video_probs:
-            kw_probs = probs[:,i].tolist()
-            for j, prob in enumerate(kw_probs):
-                result = {
-                    'score':float(prob),
-                    'index':j,
-                    'uri':f,
-                }
-                results.append(result)
-        
-        # 第一个文本特征已经在全部视频文件搜索完毕。处理 results
-        # index_list = getMultiRange(results, threshold=conf['threshold'], dValue=conf['d_value'], maxCount=conf['top_n']) #
-        index_list = getMultiRange(results, threshold=threshold, dValue=dvalue, maxCount=topn, length=length) #
-        s_results.append([kw, index_list])
-    
-    video_r = {}
-        
-    for kw, index_list in s_results:
-        videos = []
-        for idx, item in enumerate(index_list):
-            left, right = index_list[idx]['leftIndex'], index_list[idx]['rightIndex']
-            # duration = right - left 
-            start = getTime(left) # 将其转换为标准时间
-            
-            max_index = item['maxImage']['index']
-            uri = item['maxImage']['uri']
-            score = item['maxImage']['score']
-            
-            output =  "{}/clip_{}_{}.mp4".format(conf.tmp_dir, kw, idx)
-
-            logger.info('cut video:{} from: {} to: {}. maxImage:{}\noutput:{}'.format(uri, left, right, max_index, output))
-            cutVideo(start,right-left, uri, output) # 对视频进行切分
-            
-            videos.append({'uri':output, 'score':score, 'origin_video':uri, 'range':[left, right]})
-        
-        video_r[kw] = videos
-    return video_r
-
-def cut_videos(results, output_path='D:\\ai\\vedio\\vced\\data\\image'):
-    for kw, index_list in results:
-        for idx, item in enumerate(index_list):
-            left, right = index_list[idx]['leftIndex'], index_list[idx]['rightIndex']
-            # duration = right - left 
-            start = getTime(left) # 将其转换为标准时间
-            
-            max_index = item['maxImage']['index']
-            uri = item['maxImage']['uri']
-            
-            output = output_path + "/clip_{}_{}.mp4".format(kw, idx)
-
-            logger.info('kw:{}, cut video:{} from: {} to: {}. output:{}'.format(kw, uri, left, right, output))
-            cutVideo(start,right-left, uri, output) # 对视频进行切分
-            
-            
-def search_image(model, preprocess, text, image_path, threshold=conf.threshold, topn=conf.top_n):
-    '''
-        搜索指定目录，返回与给定text文本最近的top_n 张图片
-    '''
-    texts = split_text(text)
-    
-    fa, images = load_imgs(image_path)
-    
-    probs = get_similarity(model, preprocess, images, texts, device=conf.device)
-    
-    returns = {}            # {'天鹅':[{uri, score:}, ]}
-    
-    for idx, doc in enumerate(texts):
-        if doc == conf.negativate_class:
-            continue
-        text_prob = probs[:,idx]
-        indexs = np.argpartition(text_prob, topn)[-topn:]
-        ret = []
-        for i in indexs:
-            if text_prob[i] < threshold:
-                continue
-            ret.append({'uri':fa[i], 'score':float(text_prob[i])})
-        returns[doc] = ret
-        
-    logger.info('search {} in {}, found {}\n'.format(text, image_path, returns))
-        
-    return returns

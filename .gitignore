@@ -166,19 +166,26 @@ cython_debug/
 # VSCODE
 .vscode/
 
+# 模型目录
+/bert
 
-# 视频输出文件
+# 项目缓存目录&输出目录
 /tmp
+/cache
+/output
 
 # vs数据库目录
 /data
 
 # 日志文件
 *.log
+info.log.*
+error.log.*
 
 *.ipynb
 
 test.py
+voc_req.txt
 
 # 配置文件
 conf/config.json

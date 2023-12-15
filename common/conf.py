@@ -8,7 +8,6 @@ available_setting = {
 
     "clip_model_name": "ViT-H-14",       # chinese clip model： 选择的模型
     "download_root": "./",             # 模型默认下载目录，如果目录没有模型文件，则下载，有的话直接加载
-    "device":"cuda",                   #
     
     # 文本
     "sentence_size": 256,                # 文本分段最大长度
@@ -29,6 +28,17 @@ available_setting = {
     # 向量存储地址
     "image_vs":"./data/image_vs/",       # 图片存储地址   
     "video_vs":"./data/video_vs/",       # 视频存储地址
+    
+    # voc 模块配置文件
+    "voc_conf":"./conf/voc.conf",
+    
+    "cache_path":"./cache",             # 中间视频、音频缓存目录,每次工作前应清空缓存
+    "output_path": "./output",    
+    "bkg": "D:\\ai\\video\\tev\\src\\image\\bkg.jpg",       # 黑色背景图片，用于生成空白视频
+    
+    # 模型镜像源，默认huggingface，使用openi镜像源需指定openi_token
+    "mirror": "openi",
+    "openi_token": "e6ea9886c4b70aaf4b62d6efe444fa574744b5ac",  # openi token
     
     "tmp_dir":'./tmp/'                  #
 }
@@ -84,6 +94,12 @@ def read_file(path):
 @functools.lru_cache
 def get_conf():
     conf = load_config()
+    
+    if 'hps' not in conf:
+        from voc.utils import get_hparams_from_file
+        hps = get_hparams_from_file(conf.voc_conf)
+    conf.hps = hps  
+    
     return conf
 
 if __name__ == '__main__':

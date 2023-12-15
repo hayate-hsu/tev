@@ -3,16 +3,16 @@ import sys
 
 from typing import Any, Callable, Dict, List, Tuple
 
-import math
 import glob
 
 import numpy as np
-import PIL
-from PIL import Image
 import cv2
 
 from docarray import DocList
 from docarray.documents import ImageDoc
+
+from common.log import get_logger
+logger = get_logger()
 
 from db import dao
 
@@ -56,24 +56,17 @@ def load_imgs3(image_path, db):
     '''
         搜索并加载图片，如果图片已经存储在db中，则跳过，未存储， 则读取图片并处理
     '''
-    imgs = []
-    for fn in glob.glob(os.path.join(image_path, '*.jpg')):
-        # find fn ?
-        if dao.filter_one(db, {'url':{'$eq':fn}}):  # 图片已经保持在库中
-            continue
-        img = ImageDoc(url=fn)
-        img.tensor = adjust_image_size(img.url.load())
-        imgs.append(img)
-        
+    try:
+        imgs = []
+        for fn in glob.glob(os.path.join(image_path, '*.jpg')):
+            # find fn ?
+            fn = fn.replace('\\', '/')
+            if dao.filter_one(db, {'url':{'$eq':fn}}):  # 图片已经保持在库中
+                continue
+            img = ImageDoc(url=fn)
+            img.tensor = adjust_image_size(img.url.load())
+            imgs.append(img)
+    except Exception as e: 
+        logger.error('读取图片错误', exc_info=True)
     return imgs
-
-def find_from_vs(path, vs):
-    # load from vs , if not found ,load from disk
-    for fn in glob.glob(os.path.join(path, '*.jpg')):
-        query = {'uri': {'$eq': fn}}
-        docs =  vs.filter(query)           # 路径名为uri图片的features
-        if len(docs) == 1:
-            pass
-        else:
-            pass
         
