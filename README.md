@@ -35,13 +35,19 @@ pip install -r requirements.txt
 
 ### bert 模型
 
+`demo分支不需要`
+
 ### cn_clip 模型
+
+`自动下载，或者`
 
 ### voc 模型
 
+`demo分支不需要`
+
 ### config.json
 
-- openi: 配置token
+- openi: 配置token： 填写你自己的token值
 
 ## using
 

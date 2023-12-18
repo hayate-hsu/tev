@@ -14,7 +14,7 @@ available_setting = {
     "negativate_class": "other",         # 增加'other' 类型检索 
     
     # 图片
-    "max_size": 224,                     # 图片压缩大小，一般与cn_clip加载模型相关
+    "max_size": 224,                     # 图片压缩大小，一般与cn_clip加载模型窗口大小一致
     
     
     # 视频
@@ -40,7 +40,7 @@ available_setting = {
     
     # 模型镜像源，默认huggingface，使用openi镜像源需指定openi_token
     "mirror": "openi",
-    "openi_token": "e6ea9886c4b70aaf4b62d6efe444fa574744b5ac",  # openi token
+    "openi_token": "",  # openi token
     
     "tmp_dir":'./tmp/'                  #
 }
@@ -80,7 +80,7 @@ class Config(dict):
 def load_config(config_path):
     # config_path = "./conf/config.json"
     if not os.path.exists(config_path):
-        config_path = "./conf/config-template.json"
+        config_path = "./data/conf/config-template.json"
 
     config_str = read_file(config_path)
 

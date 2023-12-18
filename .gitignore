@@ -169,13 +169,12 @@ cython_debug/
 # 模型目录
 /bert
 
-# 项目缓存目录&输出目录
-/tmp
-/cache
-/output
-
 # vs数据库目录
-/data
+/data/cache
+/data/output
+/data/vs
+
+
 
 # 日志文件
 *.log
@@ -188,4 +187,4 @@ test.py
 voc_req.txt
 
 # 配置文件
-conf/config.json
+data/conf/config.json
