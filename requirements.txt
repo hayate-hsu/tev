@@ -5,6 +5,10 @@ numpy
 ffmpeg-python==0.2.0
 docarray[hnswlib]>=0.39.1
 
+edge_tts
+langdetect
+librosa
+
 huggingface_hub
 numba
 cn2an

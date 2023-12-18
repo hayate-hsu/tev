@@ -32,6 +32,8 @@ available_setting = {
     # voc 模块配置文件
     "voc_conf":"./conf/voc.conf",
     
+    "sample_rate":44100,                # 音频采样率
+    
     "cache_path":"./cache",             # 中间视频、音频缓存目录,每次工作前应清空缓存
     "output_path": "./output",    
     "bkg": "D:\\ai\\video\\tev\\src\\image\\bkg.jpg",       # 黑色背景图片，用于生成空白视频
@@ -75,8 +77,8 @@ class Config(dict):
 
 # config = Config()
 
-def load_config():
-    config_path = "./conf/config.json"
+def load_config(config_path):
+    # config_path = "./conf/config.json"
     if not os.path.exists(config_path):
         config_path = "./conf/config-template.json"
 
@@ -92,8 +94,8 @@ def read_file(path):
         return f.read()
 
 @functools.lru_cache
-def get_conf():
-    conf = load_config()
+def get_conf(conf_path='./data/conf/config.json'):
+    conf = load_config(config_path=conf_path)
     
     if 'hps' not in conf:
         from voc.utils import get_hparams_from_file

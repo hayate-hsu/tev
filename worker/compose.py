@@ -13,9 +13,7 @@ conf = get_conf()
 
 from .text import split_text
 from . import video
-
-
-from voc import audio
+from . import audio
 
 from worker.search import find_image, find_video
 
@@ -31,15 +29,22 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
     
     logger.info(f'split_text: {docs}')
     
+    # audio_results = audio.generate_audio(
+    #     docs, 
+    #     sdp_ratio=0.2, 
+    #     noise_scale=0.6,
+    #     noise_scale_w=0.8,
+    #     length_scale=1.0,
+    #     speaker='fangqi',
+    #     language='ZH'
+    #     )
+    
+    # 调用ms tts 接口，生成语音
     audio_results = audio.generate_audio(
-        docs, 
-        sdp_ratio=0.2, 
-        noise_scale=0.6,
-        noise_scale_w=0.8,
-        length_scale=1.0,
-        speaker='fangqi',
-        language='ZH'
-        )
+        docs, _rate=0, _volume=0, 
+        _lang='Auto', _gender='女', 
+        sample_rate=conf.sample_rate,
+    )
     
     # 视频搜索
     video_results = find_video(texts, video_folder)
@@ -99,9 +104,9 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
         if lenght:
             logger.warning(f'found {doc} results 不足以满足视频剪辑,将使用空白帧填充\n')
             
-            bk_img = conf.bkg
+            bk_img_path = conf.cache_path + '/{}x{}.jpg'.format(720, 1280)      # 根据目标视频size来判断
             output = conf.cache_path + "/{}_bkg_image.mp4".format(idx)
-            video.imgs_to_video([bk_img], lenght, output)
+            video.imgs_to_video([bk_img_path], lenght, output)
             r_videos.append(output)
             lenght = 0
             logger.info('find: {}, from blackground, lenght:{}\n, video file:{}\n'.format(doc, lenght, output))
@@ -111,17 +116,19 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
         doc_video = concat_fragments(r_videos, idx, doc, conf.cache_path)
         docs_videos.append(doc_video)
         
+    now =  datetime.datetime.now().strftime('%y-%m-%d_%H-%M-%S')
+    
     # 拼接处理音频
-    audio_file = conf.cache_path + '/audio.wav'
+    audio_file = conf.output_path + f'/audio_{now}.wav'
     audios = [ item[1] for item in audio_results]
-    audio_file = audio.concat_audios(audios, audio_file)
+    audio_file = audio.concat_audios(audios[:-1], audio_file)       # 过滤掉最后一个other音节。
     
     # 拼接处理视频
     ret_video = concat_fragments(docs_videos, -1, docs, conf.cache_path)
     
     # 视频+音频合成 输出目标视频, 视频名称由result+当前时间组成
     now =  datetime.datetime.now().strftime('%y-%m-%d_%H-%M-%S')
-    result_v = './output' + f'/result_{now}.mp4'          # 添加第一段文本内容
+    result_v = conf.output_path + f'/video_{now}.mp4'          # 添加第一段文本内容
     video.compose(ret_video, audio_file, result_v)
     
     return ret_video     

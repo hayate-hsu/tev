@@ -119,7 +119,14 @@ def imgs_to_video(images, lenght, output):
     # 拼接缓存目录的的 图片，进行有序拼接
     logger.info(f'图片至视频：ffmpeg -framerate {frame_rate} -f image2 -i ./cache/images/image_%02d.jpg -c:v libx264 -t {lenght} -r 30 -pix_fmt yuv420p {output}')
     os.system(f'ffmpeg -framerate {frame_rate} -f image2 -i ./cache/images/image_%02d.jpg -c:v libx264 -t {lenght} -r 30 -pix_fmt yuv420p {output}')
-
+    
+def init_blk_img(height, width, save_path):
+    from PIL import Image
+    arr = np.zeros((height,width), dtype=np.uint8)
+    img = Image.fromarray(arr)
+    
+    img.save(save_path)
+    
 
 def concat_videos(videos, output):
     '''
