@@ -2,17 +2,21 @@ import os
 import sys
 
 from typing import Any, Callable, Dict, List, Tuple
-
+import shutil
 import glob
 
 import numpy as np
 import cv2
+from PIL import Image
 
 from docarray import DocList
 from docarray.documents import ImageDoc
 
 from common.log import get_logger
 logger = get_logger()
+
+from common.conf import get_conf
+conf = get_conf()
 
 from db import dao
 
@@ -69,4 +73,41 @@ def load_imgs3(image_path, db):
     except Exception as e: 
         logger.error('读取图片错误', exc_info=True)
     return imgs
+
+def create_blk_img(blk_img, width, height):
+    '''
+    根据宽x高，创建黑色背景图片
+    '''
+    arr = np.zeros((height,width), dtype=np.uint8)
+    img = Image.fromarray(arr)
+
+    img.save(blk_img)
+    
+def scale_image(img_path, output, width, height):
+    '''
+    对图片进行等比例缩放，至少一边达到目标（width，height）要求；
+    不足部分用黑色补充。
+    '''
+    img = Image.open(img_path)
+    w,h = img.size
+    
+    if w==width and h==height:
+        # 图片与目标大小一致
+        img.close()
+        shutil.copy(img_path, output)
+        return 
+    
+    scale = min(width/w, height/h)
+    
+    nw, nh = int(w*scale, h*scale)
+    
+    img = img.resize((nw,nh), Image.BICUBIC)
+    
+    new_img = Image.new('RGB', (width, height), (0,0,0))
+    new_img.paste(img, ((w-nw)//2, (h-nh)//2))
+    
+    new_img.save(output)
+    
+
+
         

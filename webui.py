@@ -17,6 +17,14 @@ conf = get_conf()
 import gradio as gr
 import webbrowser
 
+from collections import OrderedDict
+
+resolutions = OrderedDict([('360p:640x360', [640,360, '16:9']), ('720p:1280x720', [1280,720, '16:9']),
+                          ('1080p:1920x1080', [1920,1080, '16:9']), ('2k:2560x1440', [2560,1440, '16:9']),
+                          ('4k:3840x2160', [3840,2160, '16:9']), 
+                          ('720p:960x720', [960,720, '4:3']), ('1080p:1440x1080', [1440,1080, '4:3']), 
+                          ('720p:720x1280', [720,1280, '9:16']), ('1080p:1080x1920', [1080,1920, '9:16'])])
+
 def convert_path(paths):
     '''
     '''
@@ -45,7 +53,7 @@ def find(s_text, video_paths, image_paths, threshold, video_length, d_value, ima
     
     return image_s, video_s
 
-def compose(scripts, video_paths, image_paths, threshold, video_length, d_value, image_top_n, video_top_n):
+def compose(scripts, video_paths, image_paths, resolution_rate, frame_rate, threshold, video_length, d_value, image_top_n, video_top_n):
     '''
     剪辑视频
     '''
@@ -53,9 +61,13 @@ def compose(scripts, video_paths, image_paths, threshold, video_length, d_value,
     image_paths = convert_path(image_paths)
     video_paths = convert_path(video_paths)
     
+    width, height, wh_rate = resolutions[resolution_rate]       # 宽、高、宽高比
+    
+    
     from worker.compose import synthesis
     
-    result = synthesis(scripts, video_paths, image_paths)
+    
+    result = synthesis(scripts, video_paths, image_paths, width=width, height=height, whr=wh_rate, frate=frame_rate)
     
     return result
 
@@ -112,7 +124,11 @@ if __name__ == "__main__":
                             - 文案目录未给定时，则检索匹配数据库中的全部图片&视频""")
             with gr.Row():   
                 scripts = gr.Textbox(placeholder='请输入脚本（文本）', lines=3, max_lines=20, label='用于视频剪辑的脚本')
-                btn_compose = gr.Button(value='剪辑视频')
+                with gr.Column():
+                    resolution_rate = gr.Dropdown(choices=list(resolutions.keys()), value='720p[宽]',label='视频分辨率')
+                    frame_rate = gr.Slider(minimum=24, maximum=60, value=30, step=1, label="视频帧率")
+                with gr.Column():
+                    btn_compose = gr.Button(value='剪辑视频')
             with gr.Row():   
                 composed_video = gr.Video() 
 
@@ -122,7 +138,7 @@ if __name__ == "__main__":
                          outputs=[img_r, video_r])
         
         btn_compose.click(compose, 
-                          inputs=[scripts, video_paths, image_paths, threshold, video_lenght, d_value, image_top_n, video_top_n], 
+                          inputs=[scripts, video_paths, image_paths, resolution_rate, frame_rate, threshold, video_lenght, d_value, image_top_n, video_top_n], 
                           outputs=[composed_video])
 
     webbrowser.open(f"http://127.0.0.1:{conf.port}")

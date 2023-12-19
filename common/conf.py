@@ -75,10 +75,9 @@ class Config(dict):
 
 # config = Config()
 
-def load_config():
-    config_path = "./conf/config.json"
+def load_config(config_path):
     if not os.path.exists(config_path):
-        config_path = "./conf/config-template.json"
+        config_path = "./data/conf/config-template.json"
 
     config_str = read_file(config_path)
 
@@ -92,8 +91,8 @@ def read_file(path):
         return f.read()
 
 @functools.lru_cache
-def get_conf():
-    conf = load_config()
+def get_conf(conf_path='./data/conf/config.json'):
+    conf = load_config(config_path=conf_path)
     
     if 'hps' not in conf:
         from voc.utils import get_hparams_from_file

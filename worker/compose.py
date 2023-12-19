@@ -13,6 +13,7 @@ conf = get_conf()
 
 from .text import split_text
 from . import video
+from . import image
 
 
 from voc import audio
@@ -26,6 +27,9 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
     '''
     # 初始化工作环境
     init_env()
+    
+    # 目标视频信息
+    width, height, whr = kwargs.get('width', 1920), kwargs.get('height', 1080), kwargs.get('whr', '16:9')
     
     docs = split_text(texts)
     
@@ -77,7 +81,7 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
                 lenght = lenght - (right + 1 - left)
                 
         # ret_videos : 视频片段，进行视频剪辑
-        r_videos = cut_fragment(ret_videos, idx, doc, conf.cache_path)
+        r_videos = cut_fragment(ret_videos, idx, doc, conf.cache_path, **kwargs)
         
         logger.info('find: {}, from videos, lenght: {}, left: {}\nvideos file: {}\n'.format(doc, lenght_total-lenght, lenght, r_videos))
 
@@ -89,7 +93,7 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
             r_imgs = [img.url for img in r_imgs]
             
             output = conf.cache_path + "/{}_image_tov.mp4".format(idx)
-            video.imgs_to_video(r_imgs, lenght, output)
+            video.imgs_to_video(r_imgs, lenght, output, **kwargs)
             r_videos.append(output)
             lenght = 0
             
@@ -99,9 +103,11 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
         if lenght:
             logger.warning(f'found {doc} results 不足以满足视频剪辑,将使用空白帧填充\n')
             
-            bk_img = conf.bkg
+            bk_img = conf.cache_path + f'/blk_{width}x{height}.jpg'
+            image.create_blk_img(bk_img, width, height)
+            
             output = conf.cache_path + "/{}_bkg_image.mp4".format(idx)
-            video.imgs_to_video([bk_img], lenght, output)
+            video.imgs_to_video([bk_img], lenght, output, **kwargs)
             r_videos.append(output)
             lenght = 0
             logger.info('find: {}, from blackground, lenght:{}\n, video file:{}\n'.format(doc, lenght, output))
@@ -111,22 +117,23 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
         doc_video = concat_fragments(r_videos, idx, doc, conf.cache_path)
         docs_videos.append(doc_video)
         
+    # 视频+音频合成 输出目标视频, 视频名称由result+当前时间组成
+    now =  datetime.datetime.now().strftime('%y-%m-%d_%H-%M-%S')
+    
     # 拼接处理音频
-    audio_file = conf.cache_path + '/audio.wav'
+    audio_file = conf.output_path + f'/audio_{now}.wav'
     audios = [ item[1] for item in audio_results]
-    audio_file = audio.concat_audios(audios, audio_file)
+    audio_file = audio.concat_audios(audios[:-1], audio_file)       
     
     # 拼接处理视频
     ret_video = concat_fragments(docs_videos, -1, docs, conf.cache_path)
     
-    # 视频+音频合成 输出目标视频, 视频名称由result+当前时间组成
-    now =  datetime.datetime.now().strftime('%y-%m-%d_%H-%M-%S')
-    result_v = './output' + f'/result_{now}.mp4'          # 添加第一段文本内容
+    result_v = conf.output_path + f'/video_{now}.mp4'          # 添加第一段文本内容
     video.compose(ret_video, audio_file, result_v)
     
     return ret_video     
     
-def cut_fragment(fragments, i, doc, cache_path):
+def cut_fragment(fragments, i, doc, cache_path, **kwargs):
     r_videos = []
     for idx,item in enumerate(fragments):
         left, right = item['leftIndex'], item['rightIndex']
@@ -139,7 +146,7 @@ def cut_fragment(fragments, i, doc, cache_path):
         output = cache_path + "/{}_{}.mp4".format(i, idx)
 
         logger.info('text:{}, cut video:{} from: {} to: {}. output:{}'.format(doc, uri, left, right, output))
-        video.cutVideo(start,right+1-left, uri, output) # 对视频进行切分，视频分段是 包含两边的
+        video.cutVideo(start,right+1-left, uri, output, **kwargs) # 对视频进行切分，视频分段是 包含两边的
         r_videos.append(output)
         
     return r_videos
