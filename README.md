@@ -33,6 +33,10 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
 pip install -r requirements.txt
 ```
 
+## 安装ffmpeg
+
+[ffmpeg官网](https://ffmpeg.org/download.html)下载，并将bin目录添加至系统环境变量PATH中。
+
 ## configuration（配置）
 
 ### 配置文件
@@ -86,7 +90,7 @@ voc模块，对应的语言模型，支持ZH、EN、JP三语种。当audio配置
 
 中文clip模型，用于跨模态检索。更多信息可访问[github项目地址](https://github.com/OFA-Sys/Chinese-CLIP)。
 
-CN-CLIPViT-H/14模型文件可以提前下载，下载地址：[Download](https://clip-cn-beijing.oss-cn-beijing.aliyuncs.com/checkpoints/clip_cn_vit-h-14.pt)。
+CN-CLIPViT-H/14模型文件可以提前下载，并将模型文件放到项目目录下的clip_cn目录（注意与配置文件的download_root，目录一致）。 下载地址：[Download](https://clip-cn-beijing.oss-cn-beijing.aliyuncs.com/checkpoints/clip_cn_vit-h-14.pt)。
 
 ### voc 模型
 

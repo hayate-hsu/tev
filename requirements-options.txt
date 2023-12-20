@@ -1,0 +1,13 @@
+huggingface_hub
+numba
+cn2an
+pypinyin
+jieba
+g2p_en
+num2words
+transforms
+openi
+transformers
+pyopenjtalk
+jaconv
+sentencepiece
