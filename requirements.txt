@@ -4,5 +4,8 @@ opencv-python
 numpy
 ffmpeg-python==0.2.0
 docarray[hnswlib]>=0.39.1
+
 scipy==1.11.4
 librosa
+edge_tts
+langdetect
