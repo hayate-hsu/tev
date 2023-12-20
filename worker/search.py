@@ -236,10 +236,13 @@ def update_image_db(model, preprocess, image_paths, db):
         if len(img_fs):
             db.index(img_fs)            # 添加新图片至数据库中
     
-def find_image(text, image_paths, threshold=0.5, topn=3):
+def find_image(text, image_paths, **kwargs):
     '''
     image_paths : 图片目录列表
     '''
+    threshold = kwargs.get('threshold', conf.threshold)
+    topn = kwargs.get('itopN', conf.img_top_n)   
+    
     # 加载模型
     model, preprocess = load_chinese_clip(conf.clip_model_name, conf.download_root)
     # 读取数据库
@@ -318,9 +321,14 @@ def update_video_db(model, preprocess, db, video_paths):
             if video_f:
                 db.index(video_f)   
 
-def find_video(text,video_paths, threshold=0.5, dvalue=0.1, topn=3, length=10):
+def find_video(text,video_paths, **kwargs):
     '''
     '''
+    threshold = kwargs.get('threshold', conf.threshold)
+    dvalue = kwargs.get('dvalue', conf.d_value)   
+    topn = kwargs.get('vtopN', conf.video_top_n)   
+    length = kwargs.get('lenght', conf.max_lenght)   
+      
     # 加载模型
     model, preprocess = load_chinese_clip(conf.clip_model_name, conf.download_root)
     # 读取数据库
@@ -379,26 +387,7 @@ def find_video(text,video_paths, threshold=0.5, dvalue=0.1, topn=3, length=10):
         s_results[kw] = index_list
         
     logger.info('find video results: {}'.format(s_results))
-    # video_r = {}
-    # for kw, index_list in s_results:
-    #     videos = []
-    #     for idx, item in enumerate(index_list):
-    #         left, right = index_list[idx]['leftIndex'], index_list[idx]['rightIndex']
-    #         # duration = right - left 
-    #         start = getTime(left) # 将其转换为标准时间
-            
-    #         max_index = item['maxImage']['index']
-    #         uri = item['maxImage']['uri']
-    #         score = item['maxImage']['score']
-            
-    #         output =  "{}/clip_{}_{}.mp4".format(conf.tmp_dir, kw, idx)
 
-    #         logger.info('cut video:{} from: {} to: {}. maxImage:{}\noutput:{}'.format(uri, left, right, max_index, output))
-    #         cutVideo(start,right-left, uri, output) # 对视频进行切分
-            
-    #         videos.append({'uri':output, 'score':score, 'origin_video':uri, 'range':[left, right]})
-        
-    #     video_r[kw] = videos
     return s_results
 
 

@@ -126,11 +126,11 @@ def imgs_to_video(images, lenght, output, **kwargs):
         input_images += f'-i {dst} '
         
     frame_rate = len(images)/lenght
-   
+    rate = kwargs.get('frate', 30)      #
     # -s 1080x1920
     # 拼接缓存目录的的 图片，进行有序拼接
-    logger.info(f'图片至视频：ffmpeg -framerate {frame_rate} -f image2 -i {cache_path}/image_%02d.jpg -c:v libx264 -t {lenght} -r 30 -pix_fmt yuv420p {output}')
-    os.system(f'ffmpeg -framerate {frame_rate} -f image2 -i {cache_path}/image_%02d.jpg -c:v libx264 -t {lenght} -r 30 -pix_fmt yuv420p {output}')
+    logger.info(f'图片至视频：ffmpeg -framerate {frame_rate} -f image2 -i {cache_path}/image_%02d.jpg -c:v libx264 -t {lenght} -r {rate} -pix_fmt yuv420p {output}')
+    os.system(f'ffmpeg -framerate {frame_rate} -f image2 -i {cache_path}/image_%02d.jpg -c:v libx264 -t {lenght} -r {rate} -pix_fmt yuv420p {output}')
 
 
 def concat_videos(videos, output):
@@ -172,8 +172,10 @@ def compose(video_f, audio_f, output):
     '''
     音频、视频组合
     '''
+    # '-filter_complex "[0:v]=[v];[1:a]=[a];[v][a]concat=n=1:v=1:a=1" -c:v libx264 -c:a acc -movfalgs +faststart'
     logger.info(f'compose video&audio: ffmpeg -i {video_f} -i {audio_f} -c:v copy -c:a aac -strict experimental {output}')
     os.system(f'ffmpeg -i {video_f} -i {audio_f} -c:v copy -c:a aac -strict experimental {output}')
+    # os.system(f'ffmpeg -i {video_f} -i {audio_f} -filter_complex "[0:v]=[v];[1:a]=[a];[v][a]concat=n=1:v=1:a=1" -c:v libx264 -c:a acc -movfalgs +faststart -strict experimental {output}')     
     
 def scale_video(video_path, output, **kwargs):
     '''

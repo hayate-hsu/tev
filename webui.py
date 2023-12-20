@@ -46,10 +46,18 @@ def find(s_text, video_paths, image_paths, threshold, video_length, d_value, ima
     from worker.search import find_image, find_video
     image_paths = convert_path(image_paths)
     video_paths = convert_path(video_paths)
-
-    image_s= find_image(s_text, image_paths, threshold, image_top_n)
     
-    video_s = find_video(s_text, video_paths, threshold, d_value, video_top_n, video_length)
+    # 检索参数设置
+    kwargs = {}
+    kwargs['threshold'] = threshold
+    kwargs['lenght'] = video_length
+    kwargs['dvalue'] = d_value
+    kwargs['itopN'] = image_top_n
+    kwargs['vtopN'] = video_top_n
+
+    image_s= find_image(s_text, image_paths, **kwargs)
+    
+    video_s = find_video(s_text, video_paths, **kwargs)
     
     return image_s, video_s
 
@@ -66,8 +74,20 @@ def compose(scripts, video_paths, image_paths, resolution_rate, frame_rate, thre
     
     from worker.compose import synthesis
     
+    # 视频分辨率以及帧率设置
+    kwargs = dict(width=width, height=height, whr=wh_rate, frate=frame_rate)
+    # 检索参数设置
+    kwargs['threshold'] = threshold
+    kwargs['lenght'] = video_length
+    kwargs['dvalue'] = d_value
+    kwargs['itopN'] = image_top_n
+    kwargs['vtopN'] = video_top_n
     
-    result = synthesis(scripts, video_paths, image_paths, width=width, height=height, whr=wh_rate, frate=frame_rate)
+    # tts设置
+    kwargs['speaker'] = 'fangqi'
+    kwargs['language'] = 'ZH' 
+    
+    result = synthesis(scripts, video_paths, image_paths, **kwargs)
     
     return result
 
@@ -122,10 +142,11 @@ if __name__ == "__main__":
                             - 文案与视频素材尽可能匹配
                             - 当给定文本匹配素材不足时，采用黑色帧填充
                             - 文案目录未给定时，则检索匹配数据库中的全部图片&视频""")
-            with gr.Row():   
-                scripts = gr.Textbox(placeholder='请输入脚本（文本）', lines=3, max_lines=20, label='用于视频剪辑的脚本')
+            with gr.Row():  
+                with gr.Column(): 
+                    scripts = gr.Textbox(placeholder='请输入脚本（文本）', lines=3, max_lines=20, label='用于视频剪辑的脚本')
                 with gr.Column():
-                    resolution_rate = gr.Dropdown(choices=list(resolutions.keys()), value='720p[宽]',label='视频分辨率')
+                    resolution_rate = gr.Dropdown(choices=list(resolutions.keys()), value='720p:1280x720',label='视频分辨率')
                     frame_rate = gr.Slider(minimum=24, maximum=60, value=30, step=1, label="视频帧率")
                 with gr.Column():
                     btn_compose = gr.Button(value='剪辑视频')

@@ -50,8 +50,6 @@ def generate_audio(
     
     with torch.no_grad():
         for idx, piece in enumerate(slices):
-            if piece == conf.negativate_class:
-                continue
             audio = infer(
                 piece,
                 sdp_ratio=sdp_ratio,

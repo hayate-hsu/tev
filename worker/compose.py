@@ -12,11 +12,7 @@ from common.conf import get_conf
 conf = get_conf()
 
 from .text import split_text
-from . import video
-from . import image
-
-
-from voc import audio
+from . import video, image
 
 from worker.search import find_image, find_video
 
@@ -35,21 +31,32 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
     
     logger.info(f'split_text: {docs}')
     
-    audio_results = audio.generate_audio(
-        docs, 
-        sdp_ratio=0.2, 
-        noise_scale=0.6,
-        noise_scale_w=0.8,
-        length_scale=1.0,
-        speaker='fangqi',
-        language='ZH'
+    # 转换音频时，剔除文本拆分时，添加的最后一项（other)
+    if conf.audio == 'voc':
+        from voc import audio
+        audio_results = audio.generate_audio(
+            docs[:-1], 
+            sdp_ratio=0.2, 
+            noise_scale=0.6,
+            noise_scale_w=0.8,
+            length_scale=1.0,
+            speaker=kwargs['speaker'],
+            language=kwargs['language'],
+            )
+    else:
+        # 调用ms tts 接口，生成语音
+        from . import audio
+        audio_results = audio.generate_audio(
+            docs[:-1], _rate=0, _volume=0, 
+            _lang='Auto', _gender='女', 
+            sample_rate=conf.sample_rate,
         )
     
     # 视频搜索
-    video_results = find_video(texts, video_folder)
+    video_results = find_video(texts, video_folder, **kwargs)
     
     # 图片搜索
-    image_results = find_image(texts, img_folder)
+    image_results = find_image(texts, img_folder, **kwargs)
     
     docs_videos = []        # 记录每段文本对应的视频文件
     
@@ -123,7 +130,7 @@ def synthesis(texts, video_folder, img_folder, **kwargs):
     # 拼接处理音频
     audio_file = conf.output_path + f'/audio_{now}.wav'
     audios = [ item[1] for item in audio_results]
-    audio_file = audio.concat_audios(audios[:-1], audio_file)       
+    audio_file = audio.concat_audios(audios, audio_file)       
     
     # 拼接处理视频
     ret_video = concat_fragments(docs_videos, -1, docs, conf.cache_path)

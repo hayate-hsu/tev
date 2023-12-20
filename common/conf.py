@@ -4,6 +4,7 @@ import uuid
 import functools
 
 available_setting = {
+    "audio":"voc",                       # 语音转换模型，voc：使用自训练模型；ms-tts: 使用微软在线tts服务
     "device": "cuda",
 
     "clip_model_name": "ViT-H-14",       # chinese clip model： 选择的模型
@@ -38,7 +39,7 @@ available_setting = {
     
     # 模型镜像源，默认huggingface，使用openi镜像源需指定openi_token
     "mirror": "openi",
-    "openi_token": "e6ea9886c4b70aaf4b62d6efe444fa574744b5ac",  # openi token
+    "openi_token": "",  # openi token
     
     "tmp_dir":'./tmp/'                  #
 }
@@ -77,7 +78,7 @@ class Config(dict):
 
 def load_config(config_path):
     if not os.path.exists(config_path):
-        config_path = "./data/conf/config-template.json"
+        config_path = "./common/config-template.json"
 
     config_str = read_file(config_path)
 
