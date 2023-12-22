@@ -5,6 +5,105 @@ from typing import Any, Callable, Dict, List, Tuple
 from common.conf import get_conf
 conf = get_conf()
 
+langid_languages = [
+    "af",
+    "am",
+    "an",
+    "ar",
+    "as",
+    "az",
+    "be",
+    "bg",
+    "bn",
+    "br",
+    "bs",
+    "ca",
+    "cs",
+    "cy",
+    "da",
+    "de",
+    "dz",
+    "el",
+    "en",
+    "eo",
+    "es",
+    "et",
+    "eu",
+    "fa",
+    "fi",
+    "fo",
+    "fr",
+    "ga",
+    "gl",
+    "gu",
+    "he",
+    "hi",
+    "hr",
+    "ht",
+    "hu",
+    "hy",
+    "id",
+    "is",
+    "it",
+    "ja",
+    "jv",
+    "ka",
+    "kk",
+    "km",
+    "kn",
+    "ko",
+    "ku",
+    "ky",
+    "la",
+    "lb",
+    "lo",
+    "lt",
+    "lv",
+    "mg",
+    "mk",
+    "ml",
+    "mn",
+    "mr",
+    "ms",
+    "mt",
+    "nb",
+    "ne",
+    "nl",
+    "nn",
+    "no",
+    "oc",
+    "or",
+    "pa",
+    "pl",
+    "ps",
+    "pt",
+    "qu",
+    "ro",
+    "ru",
+    "rw",
+    "se",
+    "si",
+    "sk",
+    "sl",
+    "sq",
+    "sr",
+    "sv",
+    "sw",
+    "ta",
+    "te",
+    "th",
+    "tl",
+    "tr",
+    "ug",
+    "uk",
+    "ur",
+    "vi",
+    "vo",
+    "wa",
+    "xh",
+    "zh",
+    "zu",
+]
 
 class ChineseTextSplitter:
     def __init__(self, pdf: bool = False, sentence_size: int = 256, **kwargs):
@@ -72,3 +171,105 @@ def split_text(s1:str, sentence_size:int=256) ->list:
     
     ls.append(conf.negativate_class)      # 添加other 项目
     return ls
+
+
+def mark_text(text:str, pattern:str=r'[A-Za-z]+') -> List[Dict]:
+    '''
+    识别输入文本，自动标记中英文。暂时只支持中英文。
+    通过re正则识别，还可以通过模型推理，常用的有：1.langid；2.langdetect；3.fasttext
+    中文：[\u4e00-\u9fa5]
+    英文：[a-zA-Z]
+    '''
+    engs = re.findall(pattern, text)
+    langs = []
+    if engs:
+        for item in engs:
+            p1, p_left = text.split(item)
+            if p1:
+                langs.append((p1, 'ZH'))
+            langs.append((item, 'EN'))
+            text = p_left
+    if text:
+        langs.append((text, 'ZH'))
+            
+    return langs
+
+def split_by_language(text: str, target_languages: list = ["zh", "ja", "en"]) -> list:
+    '''
+    安装语种分割文本，返回文本段、语种的list
+    '''
+    pattern = (
+        r"[\!\"\#\$\%\&\'\(\)\*\+\,\-\.\/\:\;\<\>\=\?\@\[\]\{\}\\\\\^\_\`"
+        r"\！？\。＂＃＄％＆＇（）＊＋，－／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃》「」"
+        r"『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘\'\‛\“\”\„\‟…‧﹏.]+"
+    )
+    sentences = re.split(pattern, text)
+
+    pre_lang = ""
+    start = 0
+    end = 0
+    sentences_list = []
+
+    sorted_target_languages = sorted(target_languages)
+    if sorted_target_languages in [["en", "zh"], ["en", "ja"], ["en", "ja", "zh"]]:
+        new_sentences = []
+        for sentence in sentences:
+            new_sentences.extend(split_alpha_nonalpha(sentence))
+        sentences = new_sentences
+
+    for sentence in sentences:
+        if check_is_none(sentence):
+            continue
+
+        lang = classify_language(sentence, target_languages)
+
+        end += text[end:].index(sentence)
+        if pre_lang != "" and pre_lang != lang:
+            sentences_list.append((text[start:end], pre_lang))
+            start = end
+        end += len(sentence)
+        pre_lang = lang
+    sentences_list.append((text[start:], pre_lang))
+
+    return sentences_list
+
+def classify_language(text: str, target_languages: list = None) -> str:
+    module = 'langid'
+    if module == "fastlid" or module == "fasttext":
+        from fastlid import fastlid, supported_langs
+
+        classifier = fastlid
+        if target_languages != None:
+            target_languages = [
+                lang for lang in target_languages if lang in supported_langs
+            ]
+            fastlid.set_languages = target_languages
+    elif module == "langid":
+        import langid
+
+        classifier = langid.classify
+        if target_languages != None:
+            target_languages = [
+                lang for lang in target_languages if lang in langid_languages
+            ]
+            langid.set_languages(target_languages)
+    else:
+        raise ValueError(f"Wrong module {module}")
+
+    lang = classifier(text)[0]
+
+    return lang
+
+def split_alpha_nonalpha(text):
+    return re.split(
+        r"(?:(?<=[\u4e00-\u9fff])|(?<=[\u3040-\u30FF]))(?=[a-zA-Z])|(?<=[a-zA-Z])(?:(?=[\u4e00-\u9fff])|(?=[\u3040-\u30FF]))",
+        text,
+    )
+    
+def check_is_none(item) -> bool:
+    """none -> True, not none -> False"""
+    return (
+        item is None
+        or (isinstance(item, str) and str(item).isspace())
+        or str(item) == ""
+    )

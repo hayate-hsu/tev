@@ -8,6 +8,8 @@ from .infer import infer, load_voc_model, get_hps
 from common.conf import get_conf
 conf = get_conf()
 
+from worker import text
+
 # hps = get_hparams_from_file(conf.voc_conf)
 
 def complete_audio(audio, sample_rate=44100):
@@ -50,22 +52,32 @@ def generate_audio(
     
     with torch.no_grad():
         for idx, piece in enumerate(slices):
-            audio = infer(
-                piece,
-                sdp_ratio=sdp_ratio,
-                noise_scale=noise_scale,
-                noise_scale_w=noise_scale_w,
-                length_scale=length_scale,
-                sid=speaker,
-                language=language,
-                hps=hps,
-                model=model,
-                device=conf.device,
-            )
+            # 文本语言处理
+            piece_au_list = []
+            sentences_list = text.split_by_language(piece)
+            for sentences, lang in sentences_list:
+                lang = lang.upper()
+                if lang == "JA":
+                    lang = "JP"
+                
+                audio = infer(
+                    sentences,
+                    sdp_ratio=sdp_ratio,
+                    noise_scale=noise_scale,
+                    noise_scale_w=noise_scale_w,
+                    length_scale=length_scale,
+                    sid=speaker,
+                    language=lang,
+                    hps=hps,
+                    model=model,
+                    device=conf.device,
+                )
             
-            # 音频对齐，取整
-            audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
-            lenght, com_audio = complete_audio(audio16bit, sample_rate=hps.data.sampling_rate)
+                # 音频对齐，取整
+                audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
+                piece_au_list.append(audio16bit)
+            piece_audio = np.concatenate(piece_au_list)
+            lenght, com_audio = complete_audio(piece_audio, sample_rate=hps.data.sampling_rate)
             
             audio_list.append((lenght, com_audio))
             
